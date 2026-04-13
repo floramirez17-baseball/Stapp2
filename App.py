@@ -118,12 +118,45 @@ if errors:
 # ================================================================
 # DATA LOADING FUNCTIONS
 # ================================================================
+import time
+import requests as _requests
+
+# Yahoo Finance blocks cloud-server IPs unless the request looks like a browser.
+# A shared session with a real User-Agent fixes this on Streamlit Cloud / AWS.
+_YF_SESSION = _requests.Session()
+_YF_SESSION.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+})
+
+
+def _yf_download(symbol: str, start: date, end: date) -> pd.DataFrame:
+    """yf.download with browser User-Agent and 3 retries on empty/error."""
+    for attempt in range(3):
+        try:
+            df = yf.download(
+                symbol, start=start, end=end,
+                progress=False, auto_adjust=True,
+                session=_YF_SESSION,
+            )
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))   # 1.5 s, then 3 s
+    return pd.DataFrame()
+
+
 @st.cache_data(show_spinner=False, ttl=3600)
 def load_data(ticker: str, start: date, end: date):
     """Download adjusted closing prices from Yahoo Finance."""
     try:
-        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
-        if df is None or df.empty:
+        df = _yf_download(ticker, start, end)
+        if df.empty:
             return None, "no_data"
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -138,8 +171,8 @@ def load_data(ticker: str, start: date, end: date):
 def load_benchmark(start: date, end: date):
     """Download S&P 500 benchmark data."""
     try:
-        df = yf.download("^GSPC", start=start, end=end, progress=False, auto_adjust=True)
-        if df is None or df.empty:
+        df = _yf_download("^GSPC", start, end)
+        if df.empty:
             return None
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
