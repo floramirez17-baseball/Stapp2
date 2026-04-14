@@ -125,9 +125,11 @@ elif len(tickers) > 10:
         f"(you entered {len(tickers)} — remove {len(tickers) - 10})."
     )
 
-if start_date >= end_date:
+if start_date is None or end_date is None:
+    errors.append("Please select both a **Start Date** and an **End Date**.")
+elif start_date >= end_date:
     errors.append("Start date must be **before** end date.")
-if (end_date - start_date).days < 730:
+elif (end_date - start_date).days < 730:
     errors.append("Date range must be at least 2 years (730 days) for meaningful analysis.")
 
 if errors:
